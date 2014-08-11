@@ -1,4 +1,0 @@
-Elections
-=========
-
-PVT Elections Tool
