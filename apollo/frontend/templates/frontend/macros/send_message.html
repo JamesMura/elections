@@ -27,7 +27,7 @@
   </div>
 </div>
 <script type="text/javascript">
-  var close_modal_timeout, alert_timeout;
+  var close_modal_timeout, alert_timeout, csrftoken = $('meta[name=csrf-token]').attr('content');
 
   $('#send_message_modal_btn').click(function () {
     clearTimeout(close_modal_timeout);
@@ -43,28 +43,31 @@
     parts = message.length <= 160 ? 1 : Math.ceil(message.length / 153);
 
     $('#message').val(message);
-    $('#characters').html(message.length > 1 ? message.length + ' ' + '{% trans %}characters{% endtrans %}' : message.length + ' ' + '{% trans %}character{% endtrans %}');
-    $('#parts').html(parts > 1 ? parts + ' ' + '{% trans %}message parts{% endtrans %}' : parts + ' ' + '{% trans %}message part{% endtrans %}');
+    $('#characters').html(message.length > 1 ? message.length + ' ' + "{% trans %}characters{% endtrans %}" : message.length + ' ' + "{% trans %}character{% endtrans %}");
+    $('#parts').html(parts > 1 ? parts + ' ' + "{% trans %}message parts{% endtrans %}" : parts + ' ' + "{% trans %}message part{% endtrans %}");
   });
 
   $("#send").click(function () {
     var message = $('#message').val();
     if (message) {
       $.ajax({
-        url: "{{ request.url }}",
+        url: "{{ request.url | safe }}",
         type: 'POST',
-        data: {message: message, action: 'send_message'},
-        beforeSend: function (xhr) {
+        data: {message: message, action: 'send_message', },
+        beforeSend: function (xhr, settings) {
           $('#message').attr('disabled', 'disabled');
           $('#send').attr('disabled', 'disabled');
           $('#loader').attr('style', 'visibility:visible;');
+          if (!/^(GET|HEAD|OPTIONS|TRACE)$/i.test(settings.type) && !this.crossDomain) {
+            xhr.setRequestHeader("X-CSRFToken", csrftoken);
+          }
         }
       })
       .done(function (data) {
         // Reset message textbox, display the status and hide the dialog
         $('#message').val("");
         $('#message').trigger('keyup');
-        $('#alert_message').html('<strong>{% trans %}Success{% endtrans %}!</strong> {% trans %}Your message has been sent{% endtrans %}.');
+        $('#alert_message').html("<strong>{% trans %}Success{% endtrans %}!</strong> {% trans %}Your message has been sent{% endtrans %}.");
         $('#alert').removeClass('alert-error');
         $('#alert').addClass('alert-success');
         $('#alert').fadeIn('fast');
@@ -73,7 +76,7 @@
       })
       .fail(function (){
         // Display the fail message if the request failed
-        $('#alert_message').html('<strong>{% trans %}Error{% endtrans %}!</strong> {% trans %}Please try sending again{% endtrans %}.');
+        $('#alert_message').html("<strong>{% trans %}Error{% endtrans %}!</strong> {% trans %}Please try sending again{% endtrans %}.");
         $('#alert').removeClass('alert-success');
         $('#alert').addClass('alert-error');
         $('#alert').fadeIn('fast');

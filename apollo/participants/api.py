@@ -1,4 +1,4 @@
-from flask import current_app
+from flask import current_app, jsonify
 from flask.ext.restful import Resource, fields, marshal, marshal_with
 from flask.ext.security import login_required
 from mongoengine import Q
@@ -17,13 +17,13 @@ class ParticipantItemResource(Resource):
     @login_required
     @marshal_with(PARTICIPANT_FIELD_MAPPER)
     def get(self, participant_id):
-        return services.participants.get_or_404(pk=participant_id)
+        return jsonify(services.participants.get_or_404(pk=participant_id))
 
 
 class ParticipantListResource(Resource):
     @login_required
     def get(self):
-        parser.add_argument('q', type=str)
+        parser.add_argument('q', type=unicode)
         args = parser.parse_args()
         limit = min(
             args.get('limit') or current_app.config.get('PAGE_SIZE'),
@@ -46,12 +46,13 @@ class ParticipantListResource(Resource):
             PARTICIPANT_FIELD_MAPPER
         )
 
-        meta = {'meta': {
-            'limit': limit,
-            'offset': offset,
-            'total': queryset.count(False)
-        }}
+        result = {
+            'meta': {
+                'limit': limit,
+                'offset': offset,
+                'total': queryset.count(False)
+            },
+            'objects': dataset
+        }
 
-        dataset.append(meta)
-
-        return dataset
+        return jsonify(result)

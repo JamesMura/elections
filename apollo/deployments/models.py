@@ -1,9 +1,21 @@
 from ..core import db
 
 
+class ParticipantPropertyName(db.StringField):
+    def validate(self, value):
+        from ..participants.models import Participant
+        if value in Participant._fields.keys():
+            self.error('String value cannot be one of the disallowed field names')
+        super(ParticipantPropertyName, self).validate(value)
+
+
 class CustomDataField(db.EmbeddedDocument):
-    name = db.StringField()
+    name = ParticipantPropertyName()
     label = db.StringField()
+    listview_visibility = db.BooleanField(default=False)
+
+    def __unicode__(self):
+        return self.name or u''
 
 
 # Deployment
@@ -13,10 +25,14 @@ class Deployment(db.Document):
     administrative_divisions_graph = db.StringField()
     participant_extra_fields = db.ListField(
         db.EmbeddedDocumentField(CustomDataField))
-    allow_observer_submission_edit = db.BooleanField(default=True)
+    allow_observer_submission_edit = db.BooleanField(
+        default=True, verbose_name='Allow editing of Participant submissions?')
     logo = db.StringField()
     include_rejected_in_votes = db.BooleanField(default=False)
     is_initialized = db.BooleanField(default=False)
+    dashboard_full_locations = db.BooleanField(
+        default=True,
+        verbose_name='Show all locations for dashboard stats?')
 
     meta = {
         'indexes': [
@@ -25,7 +41,7 @@ class Deployment(db.Document):
     }
 
     def __unicode__(self):
-        return self.name
+        return self.name or u''
 
 
 # Event
@@ -44,4 +60,4 @@ class Event(db.Document):
     }
 
     def __unicode__(self):
-        return self.name
+        return self.name or u''

@@ -9,7 +9,7 @@ class Role(db.Document, RoleMixin):
     description = db.StringField()
 
     def __unicode__(self):
-        return self.name
+        return self.name or u''
 
 
 class User(db.Document, UserMixin):
@@ -19,16 +19,24 @@ class User(db.Document, UserMixin):
     confirnmed_at = db.DateTimeField()
     current_login_at = db.DateTimeField()
     last_login_at = db.DateTimeField()
-    current_login_ip = db.StringField(max_length=24)
-    last_login_ip = db.StringField(max_length=24)
+    current_login_ip = db.StringField(max_length=45)
+    last_login_ip = db.StringField(max_length=45)
     login_count = db.IntField(default=0)
     roles = db.ListField(db.ReferenceField(Role,
                          reverse_delete_rule=db.PULL), default=[])
 
     deployment = db.ReferenceField(Deployment)
 
+    meta = {
+        'indexes': [
+            ['deployment'],
+            ['deployment', 'email'],
+            ['deployment', 'email', 'password']
+        ]
+    }
+
     def __unicode__(self):
-        return self.email
+        return self.email or u''
 
 
 class Need(db.Document):
@@ -49,7 +57,7 @@ class Need(db.Document):
     deployment = db.ReferenceField(Deployment)
 
     def __unicode__(self):
-        return self.action
+        return self.action or u''
 
 
 class UserUpload(db.Document):

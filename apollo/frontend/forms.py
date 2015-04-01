@@ -1,7 +1,6 @@
 from __future__ import absolute_import
 
-from collections import defaultdict
-
+from flask import g
 from flask.ext.babel import lazy_gettext as _
 from flask.ext.mongoengine.wtf.fields import ModelSelectField
 from flask.ext.wtf import Form as WTSecureForm
@@ -11,10 +10,10 @@ from wtforms import (BooleanField, IntegerField, SelectField,
                      SelectMultipleField, StringField, TextField,
                      ValidationError, validators, widgets)
 
-from ..models import Location, LocationType, Participant
+from ..models import Location, LocationType, Participant, Submission
 from ..services import (events, location_types, locations,
                         participant_partners, participant_roles, participants)
-from ..wtforms_ext import ExtendedSelectField
+from . import permissions
 
 
 class CustomModelSelectField(ModelSelectField):
@@ -24,7 +23,7 @@ class CustomModelSelectField(ModelSelectField):
         elif self.data is not None:
             return self.data
         else:
-            return None
+            return '__None'
 
 
 def _make_choices(qs, placeholder=None):
@@ -53,29 +52,18 @@ def generate_location_edit_form(location, data=None):
 
 
 def generate_participant_edit_form(participant, data=None):
-    location_choices = defaultdict(list)
-    location_data = locations.find().order_by(
-        'location_type', 'name'
-    ).scalar('id', 'name', 'location_type')
 
-    for loc_data in location_data:
-        location_choices[loc_data[2]].append(
-            (unicode(loc_data[0]), loc_data[1])
-        )
-
-    class ParticipantEditForm(WTSecureForm):
+    class ParticipantEditBaseForm(WTSecureForm):
         # participant_id = TextField(
         #     _('Participant ID'),
         #     validators=[validators.input_required()]
         # )
         name = TextField(
-            _('Name'),
-            validators=[validators.input_required()]
+            _('Name')
         )
         gender = SelectField(
             _('Gender'),
-            choices=Participant.GENDER,
-            validators=[validators.input_required()]
+            choices=Participant.GENDER
         )
         role = SelectField(
             _('Role'),
@@ -84,17 +72,11 @@ def generate_participant_edit_form(participant, data=None):
             ),
             validators=[validators.input_required()]
         )
-        supervisor = SelectField(
-            _('Supervisor'),
-            choices=_make_choices(
-                participants.find().scalar('id', 'name')
-            )
+        supervisor = TextField(
+            _('Supervisor')
         )
-        location = ExtendedSelectField(
+        location = TextField(
             _('Location'),
-            choices=_make_choices(
-                [[k, v] for k, v in location_choices.items()]
-            ),
             validators=[validators.input_required()]
         )
         # partners are not required
@@ -106,6 +88,15 @@ def generate_participant_edit_form(participant, data=None):
         )
         phone = StringField(_('Phone'))
 
+    attributes = {
+        field.name: TextField(field.label)
+        for field in g.deployment.participant_extra_fields
+    }
+
+    ParticipantEditForm = type('ParticipantEditForm', (ParticipantEditBaseForm,), attributes)
+
+    kwargs = {field: getattr(participant, field, '') for field in attributes.keys()}
+
     return ParticipantEditForm(
         formdata=data,
         # participant_id=participant.participant_id,
@@ -116,7 +107,8 @@ def generate_participant_edit_form(participant, data=None):
         partner=participant.partner.id if participant.partner else None,
         supervisor=participant.supervisor.id
         if participant.supervisor else None,
-        phone=participant.phone
+        phone=participant.phone,
+        **kwargs
     )
 
 
@@ -223,6 +215,11 @@ def generate_location_update_mapping_form(
                 _('%(label)s Geopolitical Code', label=name),
                 choices=default_choices
             )
+        if location_type.has_other_code:
+            attributes['{}_ocode'.format(slug)] = SelectField(
+                _('%(label)s Other Code', label=name),
+                choices=default_choices
+            )
         if location_type.has_registered_voters:
             attributes['{}_rv'.format(slug)] = SelectField(
                 _('%(label)s Registered Voters', label=name),
@@ -236,6 +233,19 @@ def generate_location_update_mapping_form(
     )
 
     return LocationUpdateMappingForm(*args, **kwargs)
+
+
+def validate_location(form):
+    val = WTSecureForm.validate(form)
+    if not val:
+        return val
+
+    if not form.contributor.data and not form.location.data:
+        form.location.errors.append(
+            _('Contributor and location cannot both be empty'))
+        return False
+
+    return True
 
 
 def generate_submission_edit_form_class(form):
@@ -283,6 +293,7 @@ def generate_submission_edit_form_class(form):
                         choices=choices,
                         coerce=int,
                         description=field.description,
+                        filters=[lambda data: data if data else None],
                         validators=[validators.optional()],
                         option_widget=widgets.CheckboxInput(),
                         widget=widgets.ListWidget()
@@ -314,6 +325,16 @@ def generate_submission_edit_form_class(form):
                         validators=[validators.optional()]
                     )
 
+    if (
+        form.form_type == 'CHECKLIST' and
+        permissions.edit_submission_quarantine_status.can()
+    ):
+        form_fields['quarantine_status'] = SelectField(
+            choices=Submission.QUARANTINE_STATUSES,
+            filters=[lambda data: data if data else ''],
+            validators=[validators.optional()]
+            )
+
     if form.form_type == 'INCIDENT':
         form_fields['status'] = SelectField(
             choices=STATUS_CHOICES,
@@ -327,6 +348,7 @@ def generate_submission_edit_form_class(form):
         form_fields['description'] = StringField(
             widget=widgets.TextArea()
         )
+        form_fields['validate'] = validate_location
 
     return type(
         'SubmissionEditForm',
@@ -335,18 +357,21 @@ def generate_submission_edit_form_class(form):
     )
 
 
-class FileUploadForm(WTSecureForm):
-    event = SelectField(
-        _('Event'),
-        choices=_make_choices(
-            events.find().scalar('id', 'name'),
-            _('Select Event')
-        ),
-        validators=[validators.input_required()]
-    )
-    spreadsheet = FileField(
-        _('Data File'),
-    )
+def file_upload_form(*args, **kwargs):
+    class FileUploadForm(WTSecureForm):
+        event = SelectField(
+            _('Event'),
+            choices=_make_choices(
+                events.find().scalar('id', 'name'),
+                _('Select Event')
+            ),
+            validators=[validators.input_required()]
+        )
+        spreadsheet = FileField(
+            _('Data File'),
+        )
+
+    return FileUploadForm(*args, **kwargs)
 
 
 class DummyForm(WTSecureForm):
