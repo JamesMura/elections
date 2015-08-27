@@ -1,25 +1,15 @@
 import base64
 from flask import redirect, request, url_for
-from flask.ext.admin import BaseView, expose, form
+from flask.ext.admin import BaseView, expose
 from flask.ext.admin.contrib.mongoengine import ModelView
-from flask.ext.admin.contrib.mongoengine.form import CustomModelConverter
 from flask.ext.admin.form import rules
-from flask.ext.admin.model.form import converts
 from flask.ext.babel import lazy_gettext as _
-from flask.ext.mongoengine.wtf import orm
 from flask.ext.security import current_user
 from flask.ext.security.utils import encrypt_password
 import magic
-from wtforms import FileField, PasswordField, SelectMultipleField
+from wtforms import FileField, PasswordField
 from ..core import admin
 from .. import models
-from . import forms
-
-
-class DeploymentModelConverter(CustomModelConverter):
-    @converts('ParticipantPropertyName')
-    def conv_PropertyField(self, model, field, kwargs):
-        return orm.ModelConverter.conv_String(self, model, field, kwargs)
 
 
 class DashboardView(BaseView):
@@ -39,26 +29,13 @@ class DeploymentAdminView(BaseAdminView):
     can_create = False
     can_delete = False
     column_list = ('name',)
+    form_excluded_columns = ('hostnames',)
     form_rules = [
         rules.FieldSet(
-            (
-                'name', 'logo', 'allow_observer_submission_edit',
-                'dashboard_full_locations', 'hostnames',
-                'participant_extra_fields'
-            ),
+            ('name', 'logo', 'allow_observer_submission_edit'),
             _('Deployment')
         )
     ]
-    form_subdocuments = {
-        'participant_extra_fields': {
-            'form_subdocuments': {
-                None: {
-                    'form_columns': ('name', 'label', 'listview_visibility',)
-                }
-            }
-        }
-    }
-    model_form_converter = DeploymentModelConverter
 
     def get_query(self):
         user = current_user._get_current_object()
@@ -118,7 +95,7 @@ class UserAdminView(BaseAdminView):
     '''Thanks to mrjoes and this Flask-Admin issue:
     https://github.com/mrjoes/flask-admin/issues/173
     '''
-    column_list = ('email', 'roles')
+    column_list = ('email',)
     form_excluded_columns = ('password',)
     form_rules = [
         rules.FieldSet(('email', 'password2', 'active', 'roles'))
@@ -129,7 +106,6 @@ class UserAdminView(BaseAdminView):
         return models.User.objects(deployment=user.deployment)
 
     def on_model_change(self, form, model, is_created):
-        print form.data
         if form.password2.data:
             model.password = encrypt_password(form.password2.data)
         if is_created:
@@ -141,40 +117,7 @@ class UserAdminView(BaseAdminView):
         return form_class
 
 
-class RoleAdminView(BaseAdminView):
-    can_delete = False
-    column_list = ('name',)
-
-    def get_one(self, pk):
-        role = super(RoleAdminView, self).get_one(pk)
-        role.permissions = [
-            unicode(i) for i in models.Need.objects(
-                entities=role).scalar('pk')]
-        return role
-
-    def after_model_change(self, form, model, is_created):
-        # remove model from all permissions that weren't granted
-        for need in models.Need.objects(
-                pk__nin=form.permissions.data):
-            need.update(pull__entities=model)
-
-        # add only the explicitly defined permissions
-        for pk in form.permissions.data:
-            models.Need.objects.get(pk=pk).update(add_to_set__entities=model)
-
-    def scaffold_form(self):
-        form_class = super(RoleAdminView, self).scaffold_form()
-        form_class.permissions = SelectMultipleField(
-            _('Permissions'),
-            choices=forms._make_choices(
-                models.Need.objects().scalar('pk', 'action')),
-            widget=form.Select2Widget(multiple=True))
-
-        return form_class
-
-
 admin.add_view(DashboardView(name=_('Dashboard')))
 admin.add_view(DeploymentAdminView(models.Deployment))
 admin.add_view(EventAdminView(models.Event))
 admin.add_view(UserAdminView(models.User))
-admin.add_view(RoleAdminView(models.Role))

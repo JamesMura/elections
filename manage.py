@@ -1,6 +1,4 @@
 #!/usr/bin/env python
-import os
-import warnings
 from flask.ext.script import Manager, Server, Shell
 from flask.ext.security import MongoEngineUserDatastore
 
@@ -15,34 +13,7 @@ from apollo.manage import \
      CreateDeploymentCommand, ListDeploymentsCommand, CreateEventCommand,
      ListEventsCommand,
      InitializeSubmissionsCommand,
-     SetupCommand, MessagePlaybackCommand, EventMigrationCommand)
-
-
-def read_env(env_path=None):
-    if env_path is None:
-        env_path = os.path.join(os.path.dirname(__file__), '.env')
-    if not os.path.exists(env_path):
-        warnings.warn('No environment file found. Skipping load.')
-        return
-
-    for k, v in parse_env(env_path):
-        os.environ.setdefault(k, v)
-
-
-def parse_env(env_path):
-    with open(env_path) as f:
-        for line in f:
-            line = line.strip()
-            if not line or line.startswith('#') or '=' not in line:
-                continue
-            k, v = line.split('=', 1)
-            v = v.strip('"').strip("'")
-            yield k, v
-
-
-# load the environment (if found) *before* creating the app
-if __name__ == '__main__':
-    read_env()
+     SetupCommand)
 
 app = create_app()
 
@@ -72,13 +43,10 @@ manager.add_command('create_deployment', CreateDeploymentCommand())
 manager.add_command('list_deployments', ListDeploymentsCommand())
 manager.add_command('create_event', CreateEventCommand())
 manager.add_command('list_events', ListEventsCommand())
-manager.add_command('migrate_event', EventMigrationCommand())
 
 manager.add_command('init_submissions', InitializeSubmissionsCommand())
 
 manager.add_command('init', SetupCommand())
-
-manager.add_command('playback', MessagePlaybackCommand())
 
 if __name__ == '__main__':
     manager.run()

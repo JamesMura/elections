@@ -1,24 +1,17 @@
 import calendar
 from collections import OrderedDict
 import math
-import re
 from babel.numbers import format_number
 from flask import g
 from flask.ext.babel import get_locale, lazy_gettext as _
 import pandas as pd
-from ..analyses.common import (
-    dataframe_analysis, multiselect_dataframe_analysis)
+from ..analyses.common import dataframe_analysis
 from ..analyses.voting import proportion, variance
-
-
-def _clean(fieldname):
-    '''Returns a sanitized fieldname'''
-    return re.sub(r'[^A-Z]', '', fieldname, re.I)
 
 
 def _valid_votes(df, votes):
     return df.query(' | '.join(
-        ['({} >= 0)'.format(_clean(v)) for v in votes]))
+        ['({} >= 0)'.format(v) for v in votes]))
 
 
 def checklist_question_summary(form, field, location, dataframe):
@@ -31,11 +24,7 @@ def checklist_question_summary(form, field, location, dataframe):
     else:
         stats['type'] = 'continuous'
 
-    if field.allows_multiple_values:
-        stats.update(multiselect_dataframe_analysis(
-            dataframe, field.name, sorted(field.options.values())))
-    else:
-        stats.update(dataframe_analysis(stats['type'], dataframe, field.name))
+    stats.update(dataframe_analysis(stats['type'], dataframe, field.name))
 
     try:
         for name, grp in dataframe.groupby('urban'):
@@ -112,9 +101,9 @@ def number_format(number):
 
 
 def total_registered(
-        df, form, pure=False):
+        dataframe, form, location_type, location, group='ALL', pure=False):
     try:
-        '''if group == 'RURAL':
+        if group == 'RURAL':
             df = dataframe.ix[
                 dataframe.groupby(
                     [location_type, 'urban']).groups[(location, 0)]]
@@ -124,7 +113,7 @@ def total_registered(
                     [location_type, 'urban']).groups[(location, 1)]]
         else:
             df = dataframe.ix[
-                dataframe.groupby(location_type).groups[location]]'''
+                dataframe.groupby(location_type).groups[location]]
 
         c = df.ix[:, form.registered_voters_tag].sum()
         if pd.np.isnan(c):
@@ -135,9 +124,21 @@ def total_registered(
 
 
 def all_votes_total(
-        df, form, votes,
+        dataframe, form, votes, location_type, location, group='ALL',
         pure=False):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         invalid_votes = form.invalid_votes_tag
@@ -151,12 +152,12 @@ def all_votes_total(
 
 
 def all_votes_total_pct(
-    dataframe, form, votes
+    dataframe, form, votes, location_type, location, group='ALL'
 ):
     denom = float(total_registered(dataframe,
-                  form, pure=True))
+                  form, location_type, location, group, pure=True))
     num = float(all_votes_total(dataframe,
-                form, votes, pure=True))
+                form, votes, location_type, location, group, pure=True))
     try:
         f = round((num / denom * 100.0), 2)
         return '%.2f' % f
@@ -165,10 +166,22 @@ def all_votes_total_pct(
 
 
 def all_votes_total_margin_of_error(
-    df, form, votes,
+    dataframe, form, votes, location_type, location, group='ALL',
     cv=196.0
 ):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         invalid_votes = form.invalid_votes_tag
@@ -185,8 +198,20 @@ def all_votes_total_margin_of_error(
         return 0
 
 
-def valid_votes_total(df, votes):
+def valid_votes_total(dataframe, votes, location_type, location, group='ALL'):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         c = df.ix[:, votes].sum().sum(axis=1)
@@ -197,8 +222,20 @@ def valid_votes_total(df, votes):
         return 0
 
 
-def vote_count(df, votes, vote):
+def vote_count(dataframe, votes, vote, location_type, location, group='ALL'):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         c = df[vote].sum()
@@ -209,10 +246,22 @@ def vote_count(df, votes, vote):
         return 0
 
 
-def rejected_count(df, form):
-    votes = form.party_mappings.keys()
+def rejected_count(dataframe, form, location_type, location, group='ALL'):
+    votes = form.party_mappings.values()
 
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
         rejected = form.invalid_votes_tag
 
@@ -229,9 +278,21 @@ def rejected_count(df, form):
 
 
 def vote_proportion(
-    df, form, votes, vote
+    dataframe, form, votes, vote, location_type, location, group='ALL'
 ):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         if g.deployment.include_rejected_in_votes and form.invalid_votes_tag:
@@ -245,10 +306,22 @@ def vote_proportion(
         return 0
 
 
-def rejected_proportion(df, form):
-    votes = form.party_mappings.keys()
+def rejected_proportion(dataframe, form, location_type, location, group='ALL'):
+    votes = form.party_mappings.values()
 
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
         rejected = form.invalid_votes_tag
 
@@ -266,10 +339,22 @@ def rejected_proportion(df, form):
 
 
 def vote_margin_of_error(
-    df, form, votes, vote,
+    dataframe, form, votes, vote, location_type, location, group='ALL',
     cv=196.0
 ):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
 
         if g.deployment.include_rejected_in_votes and form.invalid_votes_tag:
@@ -284,19 +369,30 @@ def vote_margin_of_error(
 
 
 def rejected_margin_of_error(
-    df, form, cv=196.0
+    dataframe, form, location_type, location, group='ALL', cv=196.0
 ):
-    votes = form.party_mappings.keys()
+    votes = form.party_mappings.values()
 
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         df = _valid_votes(df, votes)
         rejected = form.invalid_votes_tag
 
         if rejected:
             r = round(
                 abs(math.sqrt(
-                    variance(
-                        df, votes + [rejected], [rejected])) * cv), 2)
+                    variance(df, votes + [rejected], [rejected])) * cv), 2)
         else:
             r = 0
 
@@ -308,8 +404,20 @@ def rejected_margin_of_error(
 
 
 def reported(
-        df, votes, pure=False):
+        dataframe, votes, location_type, location, group='ALL', pure=False):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[dataframe.groupby(
+                [location_type, 'urban']
+            ).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[dataframe.groupby(
+                [location_type, 'urban']
+            ).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[dataframe.groupby(
+                location_type).groups[location]]
+
         rp = _valid_votes(df, votes).shape[0]
         return int(rp) if pure else number_format(int(rp))
     except:
@@ -317,22 +425,33 @@ def reported(
 
 
 def missing(
-        df, votes, pure=False):
+        dataframe, votes, location_type, location, group='ALL', pure=False):
     try:
+        if group == 'RURAL':
+            df = dataframe.ix[dataframe.groupby(
+                [location_type, 'urban']
+            ).groups[(location, 0)]]
+        elif group == 'URBAN':
+            df = dataframe.ix[
+                dataframe.groupby(
+                    [location_type, 'urban']).groups[(location, 1)]]
+        else:
+            df = dataframe.ix[
+                dataframe.groupby(location_type).groups[location]]
+
         # hack for implementing isnull is that nan * 0 != 0
         m = df.query(
-            ' & '.join(['({} * 0 != 0)'.format(
-                _clean(v)) for v in votes])).shape[0]
+            ' & '.join(['({} * 0 != 0)'.format(v) for v in votes])).shape[0]
         return int(m) if pure else number_format(int(m))
     except:
         return 0
 
 
-def reported_pct(df, votes):
+def reported_pct(dataframe, votes, location_type, location, group='ALL'):
     m = float(
-        missing(df, votes, pure=True))
+        missing(dataframe, votes, location_type, location, group, pure=True))
     r = float(
-        reported(df, votes, pure=True))
+        reported(dataframe, votes, location_type, location, group, pure=True))
     try:
         f = round((r / (m + r) * 100.0), 2)
         return '%.2f' % f
@@ -340,11 +459,11 @@ def reported_pct(df, votes):
         return 0
 
 
-def missing_pct(df, votes):
+def missing_pct(dataframe, votes, location_type, location, group='ALL'):
     m = float(
-        missing(df, votes, pure=True))
+        missing(dataframe, votes, location_type, location, group, pure=True))
     r = float(
-        reported(df, votes, pure=True))
+        reported(dataframe, votes, location_type, location, group, pure=True))
     try:
         f = round((m / (m + r) * 100.0), 2)
         return '%.2f' % f

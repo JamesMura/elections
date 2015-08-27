@@ -1,4 +1,4 @@
-from flask import current_app, jsonify
+from flask import current_app
 from flask.ext.restful import Resource, fields, marshal, marshal_with
 from flask.ext.security import login_required
 from mongoengine import Q
@@ -36,7 +36,7 @@ class LocationTypeItemResource(Resource):
         urlfield = fields.Url('locations.api.locationtype')
         data['uri'] = urlfield.output('uri', {'loc_type_id': data['id']})
 
-        return jsonify(data)
+        return data
 
 
 class LocationTypeListResource(Resource):
@@ -61,29 +61,28 @@ class LocationTypeListResource(Resource):
             urlfield = fields.Url('locations.api.locationtype')
             d['uri'] = urlfield.output('uri', {'loc_type_id': d['id']})
 
-        result = {
-            'meta': {
-                'limit': limit,
-                'offset': offset,
-                'total': queryset.count(False)
-            },
-            'objects': dataset
-        }
+        meta = {'meta': {
+            'limit': limit,
+            'offset': offset,
+            'total': queryset.count(False)
+        }}
 
-        return jsonify(result)
+        dataset.append(meta)
+
+        return dataset
 
 
 class LocationItemResource(Resource):
     @login_required
     @marshal_with(LOCATION_FIELD_MAPPER)
     def get(self, location_id):
-        return jsonify(services.locations.get_or_404(pk=location_id))
+        return services.locations.get_or_404(pk=location_id)
 
 
 class LocationListResource(Resource):
     @login_required
     def get(self):
-        parser.add_argument('q', type=unicode)
+        parser.add_argument('q', type=str)
         args = parser.parse_args()
         limit = min(
             args.get('limit') or current_app.config.get('PAGE_SIZE'),
@@ -98,7 +97,7 @@ class LocationListResource(Resource):
                 Q(name__icontains=args.get('q')) |
                 Q(code__istartswith=args.get('q')) |
                 Q(political_code__istartswith=args.get('q'))
-            ).order_by('ancestor_count')
+            )
 
         queryset = queryset.limit(limit).skip(offset)
 
@@ -107,13 +106,12 @@ class LocationListResource(Resource):
             LOCATION_FIELD_MAPPER
         )
 
-        result = {
-            'meta': {
-                'limit': limit,
-                'offset': offset,
-                'total': queryset.count(False)
-            },
-            'objects': dataset
-        }
+        meta = {'meta': {
+            'limit': limit,
+            'offset': offset,
+            'total': queryset.count(False)
+        }}
 
-        return jsonify(result)
+        dataset.append(meta)
+
+        return dataset

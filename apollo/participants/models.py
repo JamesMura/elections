@@ -25,7 +25,7 @@ class ParticipantRole(db.Document):
     deployment = db.ReferenceField(Deployment)
 
     def __unicode__(self):
-        return self.name or u''
+        return self.name
 
 
 class ParticipantPartner(db.Document):
@@ -36,7 +36,7 @@ class ParticipantPartner(db.Document):
     deployment = db.ReferenceField(Deployment)
 
     def __unicode__(self):
-        return self.name or u''
+        return self.name
 
 
 class ParticipantGroupType(db.Document):
@@ -44,7 +44,7 @@ class ParticipantGroupType(db.Document):
     deployment = db.ReferenceField(Deployment)
 
     def __unicode__(self):
-        return self.name or u''
+        return self.name
 
 
 class ParticipantGroup(db.Document):
@@ -53,7 +53,7 @@ class ParticipantGroup(db.Document):
     group_type = db.StringField()
 
     def __unicode__(self):
-        return self.name or u''
+        return self.name
 
 
 class PhoneContact(db.EmbeddedDocument):
@@ -62,7 +62,7 @@ class PhoneContact(db.EmbeddedDocument):
     last_seen = db.DateTimeField()
 
     def __unicode__(self):
-        return self.number or u''
+        return self.number
 
 
 class Participant(db.DynamicDocument):
@@ -99,22 +99,17 @@ class Participant(db.DynamicDocument):
     meta = {
         'indexes': [
             ['participant_id'],
-            ['device_id'],
-            ['location'],
-            ['phones.number'],
             ['event'],
             ['name'],
             ['role'],
             ['partner'],
-            ['groups'],
-            ['deployment'],
-            ['deployment', 'event']
+            ['groups']
         ],
         'queryset_class': ParticipantQuerySet
     }
 
     def __unicode__(self):
-        return self.name or u''
+        return self.name
 
     def clean(self):
         # unlike for submissions, this always gets called, because

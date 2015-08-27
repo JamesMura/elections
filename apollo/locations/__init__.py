@@ -1,6 +1,7 @@
-from ..core import Service, cache
+from ..core import Service
 from .models import Sample, LocationType, Location
-import unicodecsv
+import csv
+from unidecode import unidecode
 try:
     from cStringIO import StringIO
 except:
@@ -30,23 +31,12 @@ class LocationsService(Service):
         # about an invalid ObjectID
         return self.find(__raw__={'ancestors_ref': []}).first()
 
-    @cache.memoize(timeout=86400)
-    def registered_voters_map(self):
-        '''
-        This method computes a map of location ids and the corresponding
-        number of registered voters and cache the result for a day.
-        '''
-        eligible_location_types = LocationTypesService().find(
-            has_registered_voters=True).scalar('name')
-        return {pk: rv for (pk, rv) in self.find(
-            location_type__in=eligible_location_types).scalar(
-            'pk', 'registered_voters')}
-
     def export_list(self, queryset):
         headers = []
         location_types = list(LocationTypesService().find().order_by(
             'ancestors_ref'))
         for location_type in location_types:
+            last_location_type = location_type.name
             location_name = location_type.name.upper()
             headers.append('{}_N'.format(location_name))
             headers.append('{}_ID'.format(location_name))
@@ -60,15 +50,17 @@ class LocationsService(Service):
                 ))
 
         output = StringIO()
-        writer = unicodecsv.writer(output, encoding='utf-8')
-        writer.writerow([unicode(i) for i in headers])
+        writer = csv.writer(output)
+        writer.writerow([unidecode(unicode(i)) for i in headers])
         yield output.getvalue()
         output.close()
 
         if queryset.count() < 1:
             yield
         else:
-            locations = queryset
+            locations = queryset.filter(
+                location_type=last_location_type) if last_location_type \
+                else queryset
             locations = locations.order_by('code')
             for location in locations:
                 record = []
@@ -98,7 +90,7 @@ class LocationsService(Service):
                                       if this_location else '')
 
                 output = StringIO()
-                writer = unicodecsv.writer(output, encoding='utf-8')
-                writer.writerow([unicode(i) for i in record])
+                writer = csv.writer(output)
+                writer.writerow([unidecode(unicode(i)) for i in record])
                 yield output.getvalue()
                 output.close()

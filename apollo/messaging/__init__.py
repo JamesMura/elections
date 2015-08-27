@@ -2,7 +2,8 @@ from ..core import Service
 from .models import Message
 from datetime import datetime
 from flask import g
-import unicodecsv
+from unidecode import unidecode
+import csv
 try:
     from cStringIO import StringIO
 except:
@@ -12,20 +13,11 @@ except:
 class MessagesService(Service):
     __model__ = Message
 
-    def log_message(self, event, direction, text, recipient="", sender="",
-                    timestamp=None):
-        if timestamp:
-            try:
-                msg_time = datetime.utcfromtimestamp(timestamp)
-            except ValueError:
-                msg_time = datetime.utcnow()
-        else:
-            msg_time = datetime.utcnow()
-
+    def log_message(self, event, direction, text, recipient="", sender=""):
         return self.create(
             direction=direction, recipient=recipient, sender=sender,
             text=text, deployment=event.deployment, event=event,
-            received=msg_time)
+            received=datetime.utcnow())
 
     def all(self):
         """Returns a generator containing all instances of the service's model.
@@ -38,8 +30,8 @@ class MessagesService(Service):
             'Mobile', 'Text', 'Direction', 'Created', 'Delivered'
         ]
         output = StringIO()
-        writer = unicodecsv.writer(output, encoding='utf-8')
-        writer.writerow([unicode(i) for i in headers])
+        writer = csv.writer(output)
+        writer.writerow([unidecode(unicode(i)) for i in headers])
         yield output.getvalue()
         output.close()
 
@@ -56,8 +48,10 @@ class MessagesService(Service):
                 if message.delivered else ''
             ]
 
+            record = [unidecode(i) for i in record]
+
             output = StringIO()
-            writer = unicodecsv.writer(output, encoding='utf-8')
-            writer.writerow([unicode(i) for i in record])
+            writer = csv.writer(output)
+            writer.writerow([unidecode(unicode(i)) for i in record])
             yield output.getvalue()
             output.close()
