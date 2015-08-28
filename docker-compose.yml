@@ -1,0 +1,14 @@
+apollo:
+  build: .
+  env_file: .env
+  ports:
+    - "8000:5000"
+  links:
+    - database:mongodb
+    - jobqueue:redis
+
+jobqueue:
+    image: redis
+
+database:
+    image: mongo
